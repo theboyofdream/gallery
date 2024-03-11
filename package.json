@@ -11,7 +11,10 @@
   },
   "dependencies": {
     "react": "18.2.0",
-    "react-native": "0.73.5"
+    "react-native": "0.73.5",
+    "react-native-file-logger": "^0.5.3",
+    "react-native-fs": "^2.20.0",
+    "react-native-logs": "^5.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
