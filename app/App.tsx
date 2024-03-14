@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { FlatList, Image, RefreshControl, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { Dimensions, FlatList, Image, Pressable, RefreshControl, SafeAreaView, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import * as fs from 'react-native-fs'
 import Storage from "./storage";
 import { FileLogger } from "react-native-file-logger";
+import { FlashList, MasonryFlashList } from "@shopify/flash-list";
 
 
 // FileLogger.configure({
@@ -39,6 +40,12 @@ type folder = {
 type folders = { [folderPath: string]: folder }
 
 
+const excludePaths = [
+  '/storage/emulated/0/Android/obb',
+  '/storage/emulated/0/Android/data',
+]
+const extensions = ['jpg', 'jpeg', 'png', 'gif']
+
 export default function App() {
 
   async function handleStoragePermission() {
@@ -56,10 +63,13 @@ export default function App() {
     paths.pop()
     return paths.join('/')
   }
-  const excludePaths = [
-    '/storage/emulated/0/Android/obb',
-    '/storage/emulated/0/Android/data',
-  ]
+  async function getParentInfo(path: string) {
+    let info = await fs.stat(getParentPath(path))
+    if (!info.name || info.name.length < 1) {
+      info.name = info.originalFilepath.split('/').pop()
+    }
+    return info
+  }
   async function getAllFiles(basePath: string) {
     setScanning(true)
     let _folders = {} as folders
@@ -82,27 +92,44 @@ export default function App() {
               fileInfo.name = fileInfo.originalFilepath.split('/').pop()
             }
             if (fileInfo.isDirectory()) {
-              // if(_folders[name])
-              // fls[name] = await scan(newPath)
-              // console.log(fileInfo.originalFilepath)
-              _folders[newPath] = {
-                name: fileInfo.name ?? '',
-                path: fileInfo.originalFilepath,
-                ctime: fileInfo.ctime,
-                mtime: fileInfo.mtime,
-                size: fileInfo.size,
-                files: []
-              }
+              // _folders[newPath] = {
+              //   name: fileInfo.name ?? '',
+              //   path: fileInfo.originalFilepath,
+              //   ctime: fileInfo.ctime,
+              //   mtime: fileInfo.mtime,
+              //   size: fileInfo.size,
+              //   files: []
+              // }
               await scan(newPath)
             } else {
               // fls[name] = {}
-              _folders[getParentPath(newPath)].files.push(newPath)
-              _files[newPath] = {
-                name: fileInfo.name ?? '',
-                path: fileInfo.originalFilepath,
-                ctime: fileInfo.ctime,
-                mtime: fileInfo.mtime,
-                size: fileInfo.size
+              let ext = newPath.split('.').pop()?.toLowerCase()
+              // console.log(ext, extensions.includes(ext ?? ''))
+              if (ext && extensions.includes(ext)) {
+                let parentPath = getParentPath(newPath)
+
+                if (!_folders[parentPath]) {
+                  let parentInfo = await getParentInfo(newPath)
+                  _folders[parentPath] = {
+                    name: parentInfo.name ?? '',
+                    path: parentInfo.originalFilepath,
+                    ctime: parentInfo.ctime,
+                    mtime: parentInfo.mtime,
+                    size: parentInfo.size,
+                    files: []
+                  }
+                }
+
+                if (_folders[parentPath]) {
+                  _folders[parentPath].files.push(newPath)
+                  _files[newPath] = {
+                    name: fileInfo.name ?? '',
+                    path: fileInfo.originalFilepath,
+                    ctime: fileInfo.ctime,
+                    mtime: fileInfo.mtime,
+                    size: fileInfo.size
+                  }
+                }
               }
             }
           }
@@ -111,10 +138,18 @@ export default function App() {
       // return fls;
     }
 
+    // let _f = {} as folders
+    // Object.values(_folders).map(f => {
+    //   if (f.files.length > 0) {
+    //     _f[f.path] = f;
+    //   }
+    // })
+
     await scan(basePath);
 
     // console.log(_folders)
     setFolders(_folders)
+    // setFolders(_f)
     setFiles(_files)
     setScanning(false)
   }
@@ -128,53 +163,53 @@ export default function App() {
     // .catch(console.error)
   }, [])
 
+  const [activeFolderPath, setActiveFolderPath] = useState('')
+  const [activeFilesPath, setActiveFilePaths] = useState<string[]>([])
+  useEffect(() => {
+    console.log(activeFolderPath)
+    if (activeFolderPath.length > 0 && folders[activeFolderPath] && folders[activeFolderPath].files.length > 0) {
+      setActiveFilePaths(folders[activeFolderPath].files)
+    }
+  }, [activeFolderPath])
+
+  const { width } = useWindowDimensions()
+  const columns = 3;
+  const [cardSize, setCardSize] = useState(Math.floor(width / columns))
+
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <Text>files tree</Text>
-      {/* <FlatList
-        maxToRenderPerBatch={10}
-        data={Object.keys(files)}
-        keyExtractor={(item) => item}
+    <SafeAreaView style={{ flex: 1, flexDirection: 'row' }}>
+      <View style={{ width: cardSize }}>
+        <FlashList
+          data={Object.values(folders)}
+          // extraData={folders}
+          estimatedItemSize={cardSize}
+          renderItem={({ item }) => {
+            const f = item
+            // console.log(item)
+            return (
+              <Pressable onPress={() => { setActiveFolderPath(f.path) }}>
+                <Image source={{ uri: 'file://' + f.files[0] }} width={cardSize} height={cardSize} />
+                {/* <Text>name: {f.name}</Text> */}
+                <Text>{f.name}</Text>
+                {/* <Text>path: {f.path}</Text> */}
+              </Pressable>
+            )
+          }}
+          refreshing={scanning}
+          onRefresh={() => getAllFiles(getParentPath(fs.DownloadDirectoryPath))}
+        />
+      </View>
+      <MasonryFlashList
+        data={activeFilesPath}
+        numColumns={columns - 1}
+        estimatedItemSize={cardSize}
         renderItem={({ item }) => {
-          let file = files[item]
+          const f = files[item]
           return (
-            <View style={{ padding: 24, paddingVertical: 12 }}>
-              <Image
-                src={'file://' + file.path}
-                width={100}
-                height={100}
-              />
-              <Text>name: {file.name}</Text>
-              <Text>path: {file.path}</Text>
-            </View>
+            <Image source={{ uri: 'file://' + f.path }} width={cardSize} height={cardSize} />
           )
         }}
-        refreshControl={
-          <RefreshControl
-            refreshing={scanning}
-            onRefresh={() => getAllFiles(getParentPath(fs.DownloadDirectoryPath))}
-          />
-        }
-      /> */}
-      <View style={{ flex: 1 }}>
-        <ScrollView
-          refreshControl={
-            <RefreshControl
-              refreshing={scanning}
-              onRefresh={() => getAllFiles(getParentPath(fs.DownloadDirectoryPath))}
-            />
-          }
-        >
-          {
-            Object.values(files).map(f =>
-              <View style={{ padding: 24, paddingVertical: 12 }} key={f.path}>
-                <Text>name: {f.name}</Text>
-                <Text>path: {f.path}</Text>
-              </View>
-            )
-          }
-        </ScrollView>
-      </View>
+      />
     </SafeAreaView>
   )
 }
