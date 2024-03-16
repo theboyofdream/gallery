@@ -12,5 +12,7 @@
     "Gemfile": true,
     "yarn.lock": true,
     "jest.config.js": true
-  }
+  },
+  "editor.tabSize": 2,
+  "editor.indentSize": "tabSize"
 }
