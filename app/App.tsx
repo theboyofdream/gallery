@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dimensions, FlatList, Image, Pressable, RefreshControl, SafeAreaView, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import * as fs from 'react-native-fs'
-import Storage from "./storage";
+import { hasPermission, askPermissions } from "./permission";
 import { FileLogger } from "react-native-file-logger";
 import { FlashList, MasonryFlashList } from "@shopify/flash-list";
 
@@ -49,8 +49,8 @@ const extensions = ['jpg', 'jpeg', 'png', 'gif']
 export default function App() {
 
   async function handleStoragePermission() {
-    if (!await Storage.hasPermission()) {
-      await Storage.askPermissions()
+    if (!await hasPermission()) {
+      await askPermissions()
     }
   }
 
@@ -188,7 +188,7 @@ export default function App() {
             // console.log(item)
             return (
               <Pressable onPress={() => { setActiveFolderPath(f.path) }}>
-                <Image source={{ uri: 'file://' + f.files[0] }} width={cardSize} height={cardSize} />
+                <Image source={{ uri: 'file://' + f.files[0] }} width={cardSize} height={cardSize} progressiveRenderingEnabled />
                 {/* <Text>name: {f.name}</Text> */}
                 <Text>{f.name}</Text>
                 {/* <Text>path: {f.path}</Text> */}
