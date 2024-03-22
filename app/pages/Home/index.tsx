@@ -3,7 +3,7 @@ import { Screen } from 'react-native-screens';
 
 import { action, observable, runInAction } from "mobx";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, RefreshControl, View } from "react-native";
 import { useStyles } from '@themes';
 import { H1, H6, Header, Image, Paragraph, Text } from "tamagui";
 import { MasonryFlashList } from "@shopify/flash-list";
@@ -85,8 +85,14 @@ export const HomePage = observer(() => {
               // }
               // return undefined
             }}
-            refreshing={store.scanning}
-            onRefresh={store.scan}
+            // refreshing={store.scanning}
+            // onRefresh={store.scan}
+            refreshControl={
+              <RefreshControl
+                refreshing={store.scanning}
+                onRefresh={() => { store.scan() }}
+              />
+            }
           />
           {/* <MasonryFlashList 
         /> */}
