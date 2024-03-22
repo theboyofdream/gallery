@@ -15,15 +15,18 @@ export function useStyles() {
     },
     header: {
       height: '50%',
-      maxHeight: 250,
+      maxHeight: 450,
       padding: space.$3.val,
       paddingHorizontal: space.$5.val,
       justifyContent: 'center'
     },
+    row: {
+      flexDirection: 'row'
+    },
     italic: {
       fontStyle: 'italic'
     }
-  })), [])
+  })), [theme])
 
   return { ...styles }
 }
