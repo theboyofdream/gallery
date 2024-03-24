@@ -5,94 +5,129 @@ import { action, observable, runInAction } from "mobx";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useStyles } from '@themes';
-import { H1, H6, Header, Image, Paragraph, Text } from "tamagui";
+import { H1, H2, H4, H5, H6, Header, Image, Paragraph, ScrollView, Text } from "tamagui";
 import { MasonryFlashList } from "@shopify/flash-list";
 import { store } from "./state";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { MAX_COLUMNS } from "app/const";
 
 
 export const HomePage = observer(() => {
   const { screen, header, row } = useStyles()
 
   useEffect(() => {
-    if (store.folders.size < 1)
+    if (Object.keys(store.folders).length < 1) {
+      // if (store.folders.size < 1)
       store.scan()
+    }
   }, [])
 
-  // console.log(store.folders)
-  let g = useRef({ x: 0, y: 0, velocity: 0 })
 
   const pinch = Gesture.Pinch()
-  // .config({})
-  // pinch.onBegin(e => {
-  //   if (e.numberOfPointers === 2)
-  //     g.current = {
-  //       x: e.focalX,
-  //       y: e.focalY,
-  //       velocity: e.velocity
-  //     }
-  // })
-  // pinch.onEnd(e => {
-  //   if (e.numberOfPointers === 2){
-  //     if
-  //   }
-  //     g.current = {
-  //       x: e.focalX,
-  //       y: e.focalY,
-  //       velocity: e.velocity
-  //     }
-  // })
   pinch.onFinalize(e => {
-    const { numberOfPointers, scale, velocity } = e
+    const { scale } = e
     runInAction(() => {
-      console.log(velocity)
-      if (velocity < 0) {
+      if (scale < 1 && store.columns < MAX_COLUMNS) {
         store.columns += 1
-      } else if (velocity > 0) {
+      } else if (scale > 1 && store.columns != 1) {
         store.columns -= 1
       }
     })
-    // console.log({ numberOfPointers, scale, velocity }, e)
   })
 
+  const onFolderClick = action((i: number) => {
+    store.currentFolderIndex = i
+  })
+  // console.log('files: ', store.files)
 
   return (
-    <GestureDetector gesture={pinch}>
-      <Screen style={screen}>
-        <View style={header}>
-          <H1>Gallery</H1>
-          <Quote />
-        </View>
+    // <ScrollView>
+    <Screen style={screen}>
+      {/* <View style={header}>
+        <H1>Gallery</H1>
+        <Quote />
+      </View> */}
+      <GestureDetector gesture={pinch}>
         <View style={row}>
-          <MasonryFlashList
-            numColumns={store.columns}
-            data={Array.from(store.files.keys())}
-            estimatedItemSize={store.itemSize}
-            renderItem={({ item }) => {
-              // if (store.folders.has(item)) {
-              const folder = store.files.get(item)
-              // console.log(folder?.path, store.itemSize)
-              return (
-                <View>
-                  <Image
-                    source={{ uri: 'file://' + folder?.path }}
-                    width={store.itemSize}
-                    height={store.itemSize}
-                  />
-                  {/* <Text></Text> */}
-                </View>
-              )
+          <View style={{
+            flex: 1,
+            minHeight: '100%',
+            maxWidth: store.currentFolderIndex < 0 ? store.columns * store.itemSize : store.itemSize
+          }}>
+            <MasonryFlashList
+              // numColumns={
+              //   store.currentFolderIndex < 0 ?
+              //     store.columns :
+              //     1
               // }
-              // return undefined
-            }}
-            refreshing={store.scanning}
-            onRefresh={store.scan}
-          />
+              data={Object.keys(store.folders)}
+              estimatedItemSize={store.itemSize}
+              // optimizeItemArrangement
+              // if `numColumns` is `3`, you can return `2` for `index 1` and `1` for the rest to achieve a `1:2:1` split by width.
+              getColumnFlex={(items, index, maxColumns, extraData) => {
+                return store.currentFolderIndex < 0 ?
+                  store.columns :
+                  1;
+              }}
+              extraData={[store.currentFolderIndex]}
+              renderItem={({ item, index }) => {
+                const folder = store.folders[item]
+                const file = store.files[folder.files[0]]
+                return (
+                  <Pressable onPress={() => onFolderClick(index)}>
+                    <Image
+                      defaultSource={{ uri: `https://craftypixels.com/placeholder-image/${store.itemSize}/000000/0011ff&text=+` }}
+                      source={{ uri: 'file://' + file?.path }}
+                      width={store.itemSize}
+                      height={store.itemSize}
+                    />
+                    <Paragraph numberOfLines={1} ellipse>{folder?.name}</Paragraph>
+                  </Pressable>
+                )
+              }}
+              refreshing={store.scanning === 'all'}
+              onRefresh={store.scan}
+            />
+          </View>
+          {store.currentFolderIndex >= 0 &&
+            <View style={{
+              flex: 1,
+              minHeight: '100%',
+              maxWidth: store.currentFolderIndex >= 0 ? (store.columns - 1) * store.itemSize : 0
+            }}>
+              <MasonryFlashList
+                numColumns={
+                  store.currentFolderIndex >= 0 ?
+                    store.columns - 1 :
+                    0
+                }
+                // showsVerticalScrollIndicator={false}
+                extraData={[store.itemSize, store.currentFolderIndex]}
+                data={Object.values(store.folders)[store.currentFolderIndex].files}
+                estimatedItemSize={store.itemSize}
+                renderItem={({ item }) => {
+                  console.log(store.files[item].path)
+                  return (
+                    <View>
+                      <Image
+                        source={{ uri: 'file://' + store.files[item].path }}
+                        width={store.itemSize}
+                        height={store.itemSize}
+                      />
+                    </View>
+                  )
+                }}
+                refreshing={store.scanning === 'folder'}
+                onRefresh={() => store.scan(Object.keys(store.folders)[store.currentFolderIndex])}
+              />
+            </View>
+          }
           {/* <MasonryFlashList 
         /> */}
         </View>
-      </Screen>
-    </GestureDetector>
+      </GestureDetector>
+    </Screen>
+    // </ScrollView>
   )
 })
 
@@ -128,3 +163,27 @@ function Quote() {
     </Pressable>
   )
 }
+
+
+
+
+
+// <MasonryFlashList
+// numColumns={store.columns}
+// data={Array.from(store.files.keys())}
+// estimatedItemSize={store.itemSize}
+// renderItem={({ item }) => {
+//   const folder = store.files.get(item)
+//   return (
+//     <View>
+//         <Image
+//           source={{ uri: 'file://' + folder?.path }}
+//           width={store.itemSize}
+//           height={store.itemSize}
+//           />
+//       </View>
+//     )
+//   }}
+//   refreshing={store.scanning}
+//   onRefresh={store.scan}
+//   />
