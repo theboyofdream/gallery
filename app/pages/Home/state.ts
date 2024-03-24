@@ -1,19 +1,28 @@
+import { folder } from './../../const';
 import * as fs from 'react-native-fs'
-import { makeAutoObservable, runInAction } from "mobx"
+import { action, configure, flow, makeAutoObservable, runInAction } from "mobx"
 import { DEFAULT_COLUMNS, EXCLUDED_FOLDERS, files, SORT_BY, folders, toolbarType, SETTINGS, supportedFiles, SUPPORTED_FILES, file } from 'app/const'
 import { Dimensions } from 'react-native'
+import { getNameByPath, getParentPath, isHidden } from './helper';
+
+
+// mobx use strict
+configure({ enforceActions: 'always' })
 
 
 class Store {
 
   columns = DEFAULT_COLUMNS
+
+  folderColumns = this.columns
+  filesColumns = 0
+
   excludedFolders = EXCLUDED_FOLDERS
   // supportedFilesExtension = [...SUPPORTED_FILES]
 
-  scanning = false
+  scanning = null as 'folder' | 'all' | null
 
-  files: files = new Map()
-  // filePaths: Set<string> = new Set()
+  files: files = {}
   selectedFilePaths: Set<string> = new Set()
   currentFileIndex = -1
 
@@ -21,66 +30,19 @@ class Store {
   sortByFolders: Map<SORT_BY, Set<string>> = new Map()
   favouriteFilePaths: string[] = []
 
-  folders: folders = new Map()
-  // folderPaths: Set<string> = new Set()
+  folders: folders = {}
   selectedFolderPaths: Set<string> = new Set()
   currentFolderIndex = -1
 
   toolbarType: toolbarType | null = null
+
+  selectionOn: boolean = false
   selectionCategory: toolbarType | null = null
 
   settings = SETTINGS
 
   constructor() {
-    // this.itemSize = Math.floor(Dimensions.get('screen').width / this.columns)
     makeAutoObservable(this)
-  }
-
-  get totalFilesCount() {
-    return Object.keys(this.files).length
-  }
-
-  get storageUsedByFiles() {
-    let bytes = 0
-    for (let path in this.files) {
-      this.files.get(path)?.size
-      bytes += this.files.get(path)?.size || 0
-    }
-    return bytes
-  }
-
-  get filesCountByType() {
-    let counts = {} as { [k in supportedFiles]: number }
-    for (let path in this.files) {
-      let ext = this.getFileExtension(path)
-      if (ext && SUPPORTED_FILES.includes(ext)) {
-        if (counts[ext]) {
-          counts[ext] += 1
-        } else {
-          counts[ext] = 0
-        }
-      }
-    }
-    return counts
-  }
-
-  get storageUsedByType() {
-    let bytes = {} as { [k in supportedFiles]: number }
-    for (let path in this.files) {
-      let ext = this.getFileExtension(path)
-      if (ext && SUPPORTED_FILES.includes(ext)) {
-        if (bytes[ext]) {
-          bytes[ext] += this.files.get(path)?.size || 0
-        } else {
-          bytes[ext] = 0
-        }
-      }
-    }
-    return bytes
-  }
-
-  get totalFoldersCount() {
-    return Object.keys(this.folders).length
   }
 
   get itemSize() {
@@ -95,101 +57,92 @@ class Store {
     return undefined
   }
 
-  setScanning(scanning: boolean) {
+  private addFile = flow(function* (this: Store, file: fs.StatResult) {
+    if (!file.isFile() || this.files[file.originalFilepath]) { return }
+
+    const ext = file.originalFilepath.split('.').pop()?.toLowerCase() as unknown as typeof SUPPORTED_FILES[number]
+    if (!SUPPORTED_FILES.includes(ext)) { return }
+
+    this.files[file.originalFilepath] = {
+      ...file,
+      name: file.name ?? getNameByPath(file.originalFilepath)
+    }
+
+    const parentFolderPath = getParentPath(file.originalFilepath)
+
+    if (!this.folders[parentFolderPath]) {
+
+      const parentFolderInfo = yield fs.stat(parentFolderPath)
+
+      this.folders[parentFolderInfo.originalFilepath] = {
+        ...parentFolderInfo,
+        name: parentFolderInfo.name ?? getNameByPath(parentFolderInfo.originalFilepath),
+        files: [file.originalFilepath]
+      }
+      return
+    }
+
+    this.folders[parentFolderPath].files.push(file.originalFilepath)
+  })
+
+
+  private setScanning(scanning: typeof this.scanning) {
     this.scanning = scanning
   }
+  private async crawl(path: string, recurring: boolean = true) {
 
-  // private addFile(params: file) {
-  //   this.files.set(params.path, params)
-  //   const parentPath = params.path.split('/').pop()
-  //   if (parentPath && this.folders.has(parentPath)) {
-  //     const parentFolder = this.folders.get(parentPath)
-  //     if (parentFolder) {
-  //       this.folders.set(parentPath, {
-  //         ...parentFolder,
-  //         files: [...parentFolder.files, params.path]
-  //       })
-  //     }
-  //   }
-  // }
+    if (
+      this.excludedFolders.has(path) ||
+      (!this.settings.showHiddenFolders && isHidden(path))
+    ) { return }
 
-  // private addFolder(params: folder) {
-  //   if (!this.folders.has(params.path)) {
-  //     this.folders.set(params.path, params)
-  //   }
-  // }
+    const pathInfo = await fs.stat(path)
 
+    if (pathInfo.isDirectory()) {
+      const directoryNames = await fs.readdir(path)
 
-  async scan() {
-    this.setScanning(true)
+      for (const name of directoryNames) {
 
-    let files: files = new Map()
-    let sortByFiles: Map<SORT_BY, Set<string>> = new Map()
+        const newPath = path + '/' + name
+        if (!await fs.exists(newPath)) { continue }
 
-    let folders: folders = new Map()
-    let sortByFolders: Map<SORT_BY, Set<string>> = new Map()
+        const newPathInfo = await fs.stat(newPath);
 
-    const crawl = async (path: string) => {
-
-      if (this.excludedFolders.has(path)) { return }
-
-      const pathInfo = await fs.stat(path)
-      if (pathInfo.isDirectory()) {
-        const directoryNames = await fs.readdir(path)
-
-        for (const name of directoryNames) {
-          const newPath = path + '/' + name
-
-          if (await fs.exists(newPath)) {
-            const newPathInfo = await fs.stat(newPath)
-
-            if (!newPathInfo.name || newPathInfo.name.length < 1) {
-              newPathInfo.name = newPathInfo.originalFilepath.split('/').pop()
-            }
-
-            const info: file = {
-              name: newPathInfo.name ?? '',
-              path: newPathInfo.originalFilepath,
-              size: newPathInfo.size,
-              ctime: newPathInfo.ctime,
-              mtime: newPathInfo.mtime,
-            }
-
-            if (newPathInfo.isDirectory() && !folders.has(newPath)) {
-              folders.set(newPath, {
-                ...info,
-                files: new Set()
-              })
-              await crawl(newPath)
-            } else if (newPathInfo.isFile() && !files.has(newPath)) {
-              const ext = newPath.split('.').pop()?.toLowerCase() as unknown as typeof SUPPORTED_FILES[number]
-              if (SUPPORTED_FILES.includes(ext)) {
-                // const folder = folders.get(path)
-                // if (folder) {
-                //   folder.files.add(newPath)
-                //   folders.set(path, folder)
-                // }
-                files.set(newPath, info)
-              }
-            }
-          }
-        }
+        (newPathInfo.isDirectory() && recurring) && await this.crawl(newPath, recurring)
+        newPathInfo.isFile() && this.addFile(newPathInfo)
       }
     }
 
-    let basePath = fs.DownloadDirectoryPath.split('/')
-    basePath.pop()
-    await crawl(basePath.join('/'))
-
-    runInAction(() => {
-      this.files = files
-      this.folders = folders
-
-      this.sortByFiles
-    })
-
-    this.setScanning(false)
+    pathInfo.isFile() && this.addFile(pathInfo)
   }
+
+  async scan(path?: string) {
+
+    const recurring = path ? false : true;
+    this.setScanning(recurring ? 'all' : 'folder')
+
+    if (!path) {
+      let basePath = fs.DownloadDirectoryPath.split('/')
+      basePath.pop()
+      path = basePath.join('/')
+    }
+
+    await this.crawl(path, recurring)
+
+    this.setScanning(null)
+  }
+
+
+
+  // scan = flow(function* (this: Store) {
+  //   this.scanning = 'all'
+
+  //   let basePath = fs.DownloadDirectoryPath.split('/')
+  //   basePath.pop()
+  //   yield this.crawl(basePath.join('/'))
+
+  //   this.scanning = null
+  // })
 
   // favourite(paths: string[]) { }
   // send(paths: string[]) { }

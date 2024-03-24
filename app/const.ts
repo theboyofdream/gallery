@@ -5,11 +5,13 @@ export type file = {
   ctime: number,
   mtime: number,
 }
-export type files = Map<string, file>
+// export type files = Map<string, file>
+export type files = { [key: string]: file }
 
 
-export type folder = file & { files: Set<string> }
-export type folders = Map<string, folder>
+// export type folder = file & { files: Set<string> }
+export type folder = file & { files: string[] }
+export type folders = { [key: string]: folder }
 
 
 export type toolbarType = 'file' | 'files' | 'folder' | 'folders'
@@ -33,6 +35,7 @@ export const SETTINGS = {
   autoPlayVideoWithSound: false,
   autoPlayVideoWithoutSound: false,
   excludedFolders: EXCLUDED_FOLDERS,
+  showHiddenFolders: false,
   useRecycleBin: true,
   theme: 'system' as 'light' | 'dark' | 'system',
 }
