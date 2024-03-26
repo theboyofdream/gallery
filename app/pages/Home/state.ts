@@ -24,6 +24,7 @@ class Store {
 
   files: files = {}
   selectedFilePaths: Set<string> = new Set()
+  activeFilePath: string | undefined = undefined
   currentFileIndex = -1
 
   sortByFiles: Map<SORT_BY, Set<string>> = new Map()
@@ -32,6 +33,7 @@ class Store {
 
   folders: folders = {}
   selectedFolderPaths: Set<string> = new Set()
+  activeFolderPath: string | undefined = undefined
   currentFolderIndex = -1
 
   toolbarType: toolbarType | null = null
@@ -132,17 +134,6 @@ class Store {
     this.setScanning(null)
   }
 
-
-
-  // scan = flow(function* (this: Store) {
-  //   this.scanning = 'all'
-
-  //   let basePath = fs.DownloadDirectoryPath.split('/')
-  //   basePath.pop()
-  //   yield this.crawl(basePath.join('/'))
-
-  //   this.scanning = null
-  // })
 
   // favourite(paths: string[]) { }
   // send(paths: string[]) { }

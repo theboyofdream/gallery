@@ -15,6 +15,9 @@
       "@themes": [
         "app/themes"
       ],
+      "@utils": [
+        "app/utils"
+      ]
     }
   }
 }

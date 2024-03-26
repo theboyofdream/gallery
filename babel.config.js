@@ -11,8 +11,10 @@ module.exports = {
           '@pages': './app/pages',
           '@stores': './app/stores',
           '@themes': './app/themes',
+          '@utils': './app/utils'
         },
       },
     ],
+    'react-native-reanimated/plugin',
   ]
 };

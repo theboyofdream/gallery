@@ -12,13 +12,14 @@ export function useStyles() {
       minHeight: '100%',
       minWidth: '100%',
       backgroundColor: theme.background.get(),
+      // backgroundColor: theme.accentColor.get()
     },
     header: {
-      height: '50%',
-      maxHeight: 450,
+      // height: '50%',
+      // maxHeight: 450,
       padding: space.$3.val,
       paddingHorizontal: space.$5.val,
-      justifyContent: 'center'
+      // justifyContent: 'center'
     },
     row: {
       flexDirection: 'row'
